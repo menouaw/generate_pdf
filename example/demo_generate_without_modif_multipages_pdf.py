@@ -21,7 +21,7 @@ doc_gen = generator.create_generator(content, [HTML_TEMPLATE])
 out_dir = Path("output")
 out_dir.mkdir(parents=True, exist_ok=True)
 ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-out_pdf = out_dir / f"demo_generate_without_modif_{ts}.pdf"
+out_pdf = out_dir / f"demo_generate_without_modif_multipages_pdf_{ts}.pdf"
 
 for doc in doc_gen:
     doc.render_pdf(target=str(out_pdf))   # -> PDF multi-pages si le contenu déborde
