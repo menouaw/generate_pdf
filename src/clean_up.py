@@ -1,14 +1,19 @@
 import argparse
 from pathlib import Path
 
-def cleanup_pdfs_in_folder(folder, keep_pdf=None, dry_run=False):
-    folder = Path(folder)
-    pdfs = sorted(folder.glob("*.pdf"))
+def cleanup_pdfs_in_run_dir(run_dir, keep_pdf=None, dry_run=False):
+    run_dir = Path(run_dir)
+    if not run_dir.exists():
+        raise FileNotFoundError(str(run_dir))
+
+    pdfs = sorted(run_dir.rglob("*.pdf"))
     if not pdfs:
-        return {"folder": str(folder), "deleted": 0, "kept": 0, "kept_file": None, "skipped": True}
+        return {"run_dir": str(run_dir), "deleted": 0, "kept": 0, "kept_file": None, "skipped": True}
 
     if keep_pdf is not None:
-        keep_path = folder / keep_pdf if not Path(keep_pdf).is_absolute() else Path(keep_pdf)
+        keep_path = Path(keep_pdf)
+        if not keep_path.is_absolute():
+            keep_path = run_dir / keep_path
         keep_path = keep_path.resolve()
         if not keep_path.exists():
             raise FileNotFoundError(str(keep_path))
@@ -30,65 +35,57 @@ def cleanup_pdfs_in_folder(folder, keep_pdf=None, dry_run=False):
         p.unlink()
         deleted += 1
 
-    return {"folder": str(folder), "deleted": deleted, "kept": kept, "kept_file": str(keep_path), "skipped": False}
+    return {"run_dir": str(run_dir), "deleted": deleted, "kept": kept, "kept_file": str(keep_path), "skipped": False}
 
-def cleanup_all_output_subdirs(output_dir="output", keep_pdf=None, dry_run=False, recursive=False):
+def cleanup_all_output_runs(output_dir="output", keep_pdf=None, dry_run=False):
     output_dir = Path(output_dir)
     if not output_dir.exists():
         raise FileNotFoundError(str(output_dir))
 
-    folders = []
-    if recursive:
-        for d in output_dir.rglob("*"):
-            if d.is_dir():
-                folders.append(d)
-    else:
-        folders = [d for d in output_dir.iterdir() if d.is_dir()]
+    run_dirs = sorted([d for d in output_dir.iterdir() if d.is_dir()])
 
     results = []
-    for folder in sorted(folders):
+    for run_dir in run_dirs:
         try:
-            results.append(cleanup_pdfs_in_folder(folder, keep_pdf=keep_pdf, dry_run=dry_run))
+            results.append(cleanup_pdfs_in_run_dir(run_dir, keep_pdf=keep_pdf, dry_run=dry_run))
         except Exception as e:
-            results.append({"folder": str(folder), "error": str(e)})
+            results.append({"run_dir": str(run_dir), "error": str(e)})
 
     return results
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", default="output")
-    parser.add_argument("--keep-pdf", default=None, help="nom du PDF à conserver dans chaque dossier (sinon conserve le premier par ordre alphabétique)")
+    parser.add_argument("--keep-pdf", default=None)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--recursive", action="store_true", help="traite aussi les sous-dossiers à tous les niveaux (pas seulement output/*)")
     args = parser.parse_args()
 
-    results = cleanup_all_output_subdirs(
+    results = cleanup_all_output_runs(
         output_dir=args.output_dir,
         keep_pdf=args.keep_pdf,
         dry_run=args.dry_run,
-        recursive=args.recursive,
     )
 
     total_deleted = 0
     total_kept = 0
-    total_folders = 0
+    total_dirs = 0
     total_skipped = 0
     total_errors = 0
 
     for r in results:
         if "error" in r:
             total_errors += 1
-            print(f"ERROR folder={r['folder']} error={r['error']}")
+            print(f"ERROR run_dir={r['run_dir']} error={r['error']}")
             continue
-        total_folders += 1
+        total_dirs += 1
         if r.get("skipped"):
             total_skipped += 1
             continue
         total_deleted += r["deleted"]
         total_kept += r["kept"]
-        print(f"folder={r['folder']} kept_file={r['kept_file']} kept={r['kept']} deleted={r['deleted']}")
+        print(f"run_dir={r['run_dir']} kept_file={r['kept_file']} kept={r['kept']} deleted={r['deleted']}")
 
-    print(f"folders={total_folders} skipped={total_skipped} errors={total_errors} kept_total={total_kept} deleted_total={total_deleted}")
+    print(f"run_dirs={total_dirs} skipped={total_skipped} errors={total_errors} kept_total={total_kept} deleted_total={total_deleted}")
 
 if __name__ == "__main__":
     main()

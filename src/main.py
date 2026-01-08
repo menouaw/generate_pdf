@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-
 from config import GenerationConfig, setup_logging
 from pipeline import run_pipeline
 
