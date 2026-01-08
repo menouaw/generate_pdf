@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GenerationConfig:
     resolution: int = 80
-    num_documents: int = 1000
+    num_documents: int = 10
     batch_size: int = 50
     output_format: str = "JPEG"          # "PNG" ou "JPEG"
     jpeg_quality: int = 70
@@ -208,7 +208,7 @@ class DocumentGenerationPipeline:
 
 # ====== MAIN ======
 def main():
-    sample_text = "sample/generation/long_example.txt"
+    sample_text = "../explore/sample/generation/long_example.txt"
 
     if os.path.exists(sample_text):
         with open(sample_text, "r", encoding="utf-8") as f:

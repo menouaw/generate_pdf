@@ -29,7 +29,7 @@ plt.imshow(dst, cmap="gray")
 ```
 
 <p float="left">
-  <img src="../../example/sample/degradation/degrader.png" width="500" />
+  <img src="../../explore/sample/degradation/degrader.png" width="500" />
 </p>
 
 #### Advanced Degradation Configurations
@@ -68,7 +68,7 @@ plt.imshow(dst, cmap="gray")
 ```
 
 <p float="left">
-  <img src="../../example/sample/degradation/degrader_heavy.png" width="500" />
+  <img src="../../explore/sample/degradation/degrader_heavy.png" width="500" />
 </p>
 
 ### Document Blurring
@@ -90,7 +90,7 @@ plt.show()
 ```
 
 <p float="left">
-  <img src="../../example/sample/degradation/blur.png" width="600" />
+  <img src="../../explore/sample/degradation/blur.png" width="600" />
 </p>
 
 ### Bleed Through
@@ -111,7 +111,7 @@ plt.show()
 ```
 
 <p float="left">
-  <img src="../../example/sample/degradation/bleed_through.png" width="600" />
+  <img src="../../explore/sample/degradation/bleed_through.png" width="600" />
 </p>
 
 
@@ -133,7 +133,7 @@ plt.show()
 ```
 
 <p float="left">
-  <img src="../../example/sample/degradation/salt_pepper.png" width="600" />
+  <img src="../../explore/sample/degradation/salt_pepper.png" width="600" />
 </p>
 
 ### Morphological Degradations
@@ -172,7 +172,7 @@ plt.show()
 ```
 
 <p float="left">
-  <img src="../../example/sample/degradation/open_erode.png" width="1000" />
+  <img src="../../explore/sample/degradation/open_erode.png" width="1000" />
 </p>
 
 
@@ -200,7 +200,7 @@ plt.show()
 ```
 
 <p float="left">
-  <img src="../../example/sample/degradation/close_dilate.png" width="1000" />
+  <img src="../../explore/sample/degradation/close_dilate.png" width="1000" />
 </p>
 
 We are “closing” or “dilating” the white background, thus chipping away the foreground structures (text). This effect can mimic the effect of degrading ink or a printer running out of ink. 
@@ -210,7 +210,7 @@ We are “closing” or “dilating” the white background, thus chipping away 
 An important element of the morphological degradation is the [structuring element](http://homepages.inf.ed.ac.uk/rbf/HIPR2/strctel.htm), or the kernel used. With proper size and shape of the kernel, one can extract interesting structures of the source image.
 
 <p float="left">
-  <img src="../../example/sample/degradation/kernel_morph.png" width="600" />
+  <img src="../../explore/sample/degradation/kernel_morph.png" width="600" />
 </p>
 
 ```python
