@@ -141,23 +141,26 @@ class DocumentGenerationPipeline:
     def run(self, content_paragraphs: List[str], output_dir: Path) -> Path:
         from genalog.generation.content import ContentType
 
-        # Création du répertoire de sortie
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        run_dir = output_dir / f"generation_{ts}"
+        # --- Création du répertoire de sortie (nom temporaire) ---
+        now = datetime.now()
+        prefix = now.strftime("gen_%d%m_%H%M")  # ex: gen_0701_1911
+        run_dir = output_dir / f"{prefix}_-_tmp"
         run_dir.mkdir(parents=True, exist_ok=True)
 
         mode = "grayscale" if self.config.grayscale else "RGB"
-        logger.info(f"Génération de {self.config.num_documents} documents ({mode}, {self.config.output_format})...")
+        logger.info(
+            f"Génération de {self.config.num_documents} documents ({mode}, {self.config.output_format})..."
+        )
 
-        # Préparation des données
+        # --- Préparation des données ---
         content_types = [ContentType.PARAGRAPH] * len(content_paragraphs)
         content_data = (content_paragraphs, content_types)
         config_dict = self.config.to_serializable()
 
-        # Découpage en batches
+        # --- Découpage en batches ---
         all_indices = list(range(self.config.num_documents))
         batches = [
-            all_indices[i:i + self.config.batch_size]
+            all_indices[i : i + self.config.batch_size]
             for i in range(0, len(all_indices), self.config.batch_size)
         ]
         batch_args = [(batch, content_data, str(run_dir), config_dict) for batch in batches]
@@ -169,9 +172,8 @@ class DocumentGenerationPipeline:
         with ProcessPoolExecutor(
                 max_workers=self.config.max_workers,
                 initializer=_init_worker,
-                initargs=(self.config.template_name,)
+                initargs=(self.config.template_name,),
         ) as executor:
-
             futures = {executor.submit(_process_document_batch, args): args[0] for args in batch_args}
 
             for future in as_completed(futures):
@@ -188,7 +190,7 @@ class DocumentGenerationPipeline:
         total_time = time.perf_counter() - t0
         docs_per_second = processed / total_time if total_time > 0 else 0
 
-        # Rapport
+        # --- Rapport ---
         report_lines = [
             f"total_documents={self.config.num_documents}",
             f"generated={processed}",
@@ -202,9 +204,25 @@ class DocumentGenerationPipeline:
         report_path = run_dir / "report.txt"
         report_path.write_text("\n".join(report_lines), encoding="utf-8")
 
-        logger.info(f"Terminé: {processed} docs en {total_time:.2f}s ({docs_per_second:.2f} docs/s)")
-        return run_dir
+        logger.info(
+            f"Terminé: {processed} docs en {total_time:.2f}s ({docs_per_second:.2f} docs/s)"
+        )
 
+        # --- Renommage final du dossier ---
+        # On garde les décimales mais "sans virgule" (en pratique: sans séparateur décimal).
+        # Exemple: 854.32 -> "85432"
+        dps_str = f"{docs_per_second:.2f}".replace(".", "").replace(",", "")
+
+        final_name = f"{prefix}_-_{self.config.num_documents}_{dps_str}"
+        final_dir = output_dir / final_name
+
+        # Si le nom existe déjà (relance la même minute), on ajoute les secondes pour éviter collision
+        if final_dir.exists():
+            suffix = now.strftime("%S")
+            final_dir = output_dir / f"{final_name}_{suffix}"
+
+        run_dir.rename(final_dir)
+        return final_dir
 
 # ====== MAIN ======
 def main():
