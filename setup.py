@@ -23,6 +23,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url='https://github.com/microsoft/genalog',
     packages=setuptools.find_packages(exclude=['tests', 'tests.*']),
+    py_modules=["sitecustomize"],
     package_data={'': [
         'genalog/generation/templates/*.jinja'
     ]},
