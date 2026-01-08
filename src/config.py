@@ -14,13 +14,15 @@ def setup_logging():
 @dataclass
 class GenerationConfig:
     resolution: int = 80
-    num_documents: int = 100
+    num_documents: int = 1000
     batch_size: int = 50
+    chunksize: int = 1
     output_format: str = "JPEG"
     jpeg_quality: int = 70
     grayscale: bool = True
     max_workers: Optional[int] = None
     template_name: str = "columns.html.jinja"
+    shard_size: int = 1000
 
     def to_serializable(self) -> dict:
         return {
