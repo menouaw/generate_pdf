@@ -1,4 +1,4 @@
-## Générateur de PDFs “scannés” (Genalog + WeasyPrint) — Documentation d’utilisation
+## Guide d'utilisation
 
 Ce projet génère des **PDF multi-pages non sélectionnables** (“scannés”) à partir d’un texte.
 
@@ -6,7 +6,7 @@ Le rendu se fait en **images** (PNG/JPEG) puis ces images sont **assemblées en 
 
 ---
 
-## Architecture (fichiers)
+## Architecture
 
 - `main.py`
 
@@ -14,36 +14,42 @@ Le rendu se fait en **images** (PNG/JPEG) puis ces images sont **assemblées en 
 
 - `config.py`
 
-  Configuration et logging.
-
-- `worker.py`
-
-  Code exécuté dans les processus workers (init template, rendu pages→images, assemblage PDF).
+  Configuration + logging. Contient `GenerationConfig` (y compris les paramètres de performance et de sharding).
 
 - `pipeline.py`
 
   Orchestration : découpe en batches, exécution parallèle, reporting, renommage final du répertoire.
 
+  **Mise à jour** : utilisation de `executor.map` (pas de stockage de milliers/millions de futures).
+
+- [`worker.py`](http://worker.py)
+
+  Code exécuté dans les processus workers (init template, rendu pages→images, assemblage PDF).
+
+  **Mise à jour** : retours IPC minimisés (le worker renvoie seulement des compteurs), erreurs écrites dans des logs worker.
+
 - `clean_up.py`
 
-  Nettoyage disque : supprime tous les PDF sauf 1 dans chaque sous-dossier de `output/`.
+  Nettoyage disque : supprime tous les PDF sauf 1 dans **chaque run** sous `output/`, en recherchant les PDF **récursivement** (compatible avec le sharding).
 
 
 ---
 
-## Principe de génération (résumé)
+## Principe de génération
 
 1. Lecture du texte et découpage en paragraphes.
 2. Construction d’un `CompositeContent` (Genalog) à partir des paragraphes.
 3. Dans chaque worker :
-    - rendu HTML (template Jinja2) → `weasyprint.Document`
-    - rendu page par page en image
-    - conversion optionnelle en grayscale
-    - encodage en JPEG ou PNG
-    - assemblage en PDF via `img2pdf`
-4. Écriture du PDF final `doc_XXXXXXXX.pdf` dans un dossier d’exécution.
+  - rendu HTML (template Jinja2) → `weasyprint.Document`
+  - rendu page par page en image (Cairo surface)
+  - composition sur fond blanc (suppression alpha)
+  - conversion optionnelle en grayscale
+  - encodage en JPEG ou PNG
+  - assemblage en PDF via `img2pdf`
+4. Écriture du PDF final `doc_XXXXXXXX.pdf` dans un dossier d’exécution (avec **sharding** en sous-dossiers si activé).
 5. Écriture d’un rapport `report.txt`.
-6. Renommage du dossier final avec un indicateur de performance.
+6. Écriture des erreurs (si besoin) dans `errors.log`.
+7. Renommage du dossier final avec un indicateur de performance.
 
 ---
 
@@ -65,11 +71,15 @@ Paramètres importants :
 
   Taille des lots envoyés aux workers.
 
+- `chunksize` (int)
+
+  Paramètre passé à `executor.map`(..., chunksize=...)`.
+
+  Augmenter `chunksize` réduit l’overhead d’ordonnancement, surtout quand il y a beaucoup de batches.
+
 - `output_format` (str)
 
-  `"JPEG"` ou `"PNG"`.
-
-  `JPEG` est souvent plus léger et plus rapide.
+  `"JPEG"` ou `"PNG"`. `JPEG` est souvent plus léger et plus rapide.
 
 - `jpeg_quality` (int)
 
@@ -81,17 +91,25 @@ Paramètres importants :
 
 - `max_workers` (Optional[int])
 
-  Nombre de processus. `None` laisse Python choisir (souvent = nombre de cœurs).
+  Nombre de processus. `None` laisse Python choisir.
 
 - `template_name` (str)
 
   Nom du template, ex. `"columns.html.jinja"`.
 
+- `shard_size` (int)
+
+  Nombre de documents par sous-dossier de sortie.
+
+  Exemple : `shard_size=1000` → `run_dir/00000/doc_00000000.pdf`, `run_dir/00001/doc_00001000.pdf`, etc.
+
+  C’est crucial pour éviter un dossier avec des millions de fichiers.
+
 
 Notes :
 
 - `to_serializable()` retourne seulement les paramètres sérialisables envoyés au worker :
-    - `resolution`, `output_format`, `jpeg_quality`, `grayscale`.
+  - `resolution`, `output_format`, `jpeg_quality`, `grayscale`.
 
 ---
 
@@ -100,24 +118,26 @@ Notes :
 Le projet désactive les logs externes (WeasyPrint, fontTools) afin d’éviter du bruit.
 
 - `setup_logging()` configure :
-    - logs globaux en `INFO`
-    - logs externes en `CRITICAL`
-    - désactivation des warnings
+  - logs globaux en `INFO`
+  - logs externes en `CRITICAL`
+  - désactivation des warnings
 
 ---
 
-## Pipeline (`DocumentGenerationPipeline` / `run_pipeline`)
+## Pipeline (`run_pipeline` dans `pipeline.py`)
 
 Le pipeline :
 
 - crée un répertoire temporaire `output/gen_DDMM_HHMM_-_tmp`
 - découpe les indices `0..num_documents-1` en batches de `batch_size`
-- soumet les batches à un `ProcessPoolExecutor`
+- exécute les batches via `ProcessPoolExecutor`
+- **mise à jour** : utilise `executor.map` sur un itérateur (pas de création massive de futures)
 - affiche la progression et le débit (docs/s)
 - écrit `report.txt`
+- fusionne les logs d’erreurs worker en `errors.log` (si présents)
 - renomme le dossier final en incluant un indicateur de performance :
-    - `gen_DDMM_HHMM_-_<num_documents>_<docs_per_second_sans_point>`
-    - ex : `gen_0701_1444_-_1000_85432`
+  - `gen_DDMM_HHMM_-_<num_documents>_<docs_per_second_sans_point>`
+  - ex : `gen_0701_1444_-_1000_85432`
 
 Le rapport `report.txt` contient typiquement :
 
@@ -127,19 +147,22 @@ Le rapport `report.txt` contient typiquement :
 - `grayscale`
 - `output_format`
 - `resolution`
+- `batch_size`
+- `chunksize`
+- `shard_size`
 - `total_seconds`
 - `docs_per_second`
 
 ---
 
-## Worker (`worker.py`)
+## Worker ([`worker.py`](http://worker.py))
 
 ### Initialisation worker (`_init_worker`)
 
 Appelée **une seule fois par process** via `initializer=` dans `ProcessPoolExecutor` :
 
-- crée un `DocumentGenerator`
 - charge le template Jinja2 une fois : `_worker_template`
+- initialise un fichier d’erreurs par worker : `errors_worker_<pid>.log`
 
 Objectif : éviter de recharger l’environnement / templates à chaque document.
 
@@ -151,25 +174,26 @@ Entrée :
 - `content_data` : `(paragraphs, content_types)`
 - `run_dir` : dossier de sortie
 - `config_dict` : config sérialisée
+- `shard_size` : taille de shard
 
 Pour chaque index :
 
-- crée `Document(content, _worker_template)`
-- rend `doc._document` en images page par page
-- assemble en PDF `doc_XXXXXXXX.pdf`
-- retourne `(idx, path_pdf, error)`
+- calcule le shard : `idx // shard_size`
+- crée le sous-dossier shard si nécessaire
+- génère `doc_XXXXXXXX.pdf` dans le shard
+- **mise à jour** : retourne uniquement `(processed_count, error_count)` au master
+- en cas d’erreur : écrit la ligne `idx=... error=...` dans le fichier d’erreur du worker
 
 ### Rendu (page → image → bytes → PDF)
 
 Fonction `_render_document(doc, target_pdf, config)` :
 
-- récupère chaque page `doc._document.pages`
-- crée un doc single-page : `doc._document.copy([page])`
-- rend en surface Cairo `write_image_surface(resolution=...)`
+- parcourt `doc._document.pages`
+- rend la page en surface Cairo : `write_image_surface(resolution=...)`
 - conversion BGRA → image
 - fond blanc (suppression alpha)
 - grayscale optionnel
-- encodage en JPEG/PNG
+- encodage JPEG/PNG
 - `img2pdf.convert(image_bytes_list)` → PDF image-only
 
 ---
@@ -181,39 +205,45 @@ Fonction `_render_document(doc, target_pdf, config)` :
 Dans `main.py`, modifie la config (exemples) :
 
 - rapide / dataset massif :
-    - `resolution=80`
-    - `output_format="JPEG"`
-    - `jpeg_quality=60..75`
-    - `grayscale=True`
+  - `resolution=80`
+  - `output_format="JPEG"`
+  - `jpeg_quality=60..75`
+  - `grayscale=True`
+  - `shard_size=1000` (ou 5000/10000 selon ton FS)
+  - `batch_size=25..100`
+  - `chunksize=1..4`
 - plus qualitatif :
-    - `resolution=150..300`
-    - `output_format="PNG"` ou `JPEG` qualité 80–90
+  - `resolution=150..300`
+  - `output_format="PNG"` ou `JPEG` qualité 80–90
 
 ### 2) Lancer
 
 Depuis la racine du projet :
 
 ```bash
-python main.py
+python [main.py](http://main.py)
 ```
 
 Sorties :
 
-- `output/<run_folder>/doc_00000000.pdf`, etc.
+- `output/<run_folder>/<shard>/doc_00000000.pdf`, etc.
 - `output/<run_folder>/report.txt`
+- `output/<run_folder>/errors.log` (si erreurs)
 
 ---
 
 ## Utilisation : nettoyage disque (`clean_up.py`)
 
-Objectif : **dans chaque sous-dossier de `output/`**, supprimer tous les `*.pdf` sauf 1.
+Objectif : dans chaque run sous `output/`, supprimer tous les `*.pdf` sauf 1.
+
+**Mise à jour** : la recherche des PDFs est **récursive** (`rglob("*.pdf")`), compatible avec les sous-dossiers shardés.
 
 ### Exécution simple
 
-Nettoie tous les dossiers `output/*/` :
+Nettoie tous les runs `output/*/` :
 
 ```bash
-python clean_up.py
+python clean_[up.py](http://up.py)
 ```
 
 ### Mode simulation (recommandé)
@@ -221,52 +251,44 @@ python clean_up.py
 Affiche ce qui serait supprimé :
 
 ```bash
-python clean_up.py --dry-run
+python clean_[up.py](http://up.py) --dry-run
 ```
 
 ### Dossier output personnalisé
 
 ```bash
-python clean_up.py --output-dir "chemin/vers/output"
+python clean_[up.py](http://up.py) --output-dir "chemin/vers/output"
 ```
 
-### Nettoyage récursif
+### Conserver un PDF précis
 
-Nettoie aussi les sous-dossiers à tous les niveaux (`output/**/`) :
+Garde un PDF spécifique (chemin relatif au run ou chemin absolu) :
 
 ```bash
-python clean_up.py --recursive
+python clean_[up.py](http://up.py) --keep-pdf "00000/doc_00000000.pdf"
 ```
 
-### Conserver un PDF précis dans chaque dossier
-
-Par exemple, garder `doc_00000000.pdf` si présent :
-
-```bash
-python clean_up.py --keep-pdf "doc_00000000.pdf"
-```
+Si tu ne fournis pas `--keep-pdf`, le programme conserve le **premier PDF par ordre alphabétique** parmi tous les PDFs trouvés récursivement.
 
 ---
 
 ## Conseils performance (pour très gros volumes)
 
-- **Éviter le PNG** si possible : privilégier `JPEG` (souvent beaucoup plus léger).
-- Ajuster `resolution` : c’est le levier n°1.
+- Éviter le PNG si possible : privilégier `JPEG`.
+- Ajuster `resolution` : levier n°1.
 - Ajuster `max_workers` :
-    - trop de workers peut saturer RAM / CPU et ralentir
-    - tester `max_workers = (cpu_count - 1)` puis ajuster.
-- Ajuster `batch_size` :
-    - trop petit → overhead multiprocessing
-    - trop grand → latence de progression + pics mémoire
-    - valeurs usuelles : 20–200 selon taille des docs.
-- Stockage :
-    - SSD recommandé
-    - lancer un nettoyage périodique (`clean_up.py`) si tu n’as besoin que d’un échantillon.
+  - trop de workers peut saturer RAM/CPU
+  - il vaut mieux un débit stable qu’un pic qui provoque des OOM.
+- Ajuster `batch_size` et `chunksize` :
+  - `batch_size` agit sur la latence et le coût d’appel côté worker
+  - `chunksize` agit sur l’overhead de scheduling côté master
+- Activer le sharding via `shard_size` pour éviter des millions de fichiers dans un seul dossier.
+- SSD recommandé.
 
 ---
 
 ## Dépannage
 
-- **PDF vide ou corrompu** : vérifier le template (`template_name`) et que `genalog` trouve bien ses templates.
-- **Lent / RAM élevée** : baisser `resolution`, baisser `max_workers`, augmenter `batch_size` modérément.
-- **Trop de logs** : vérifier que `setup_logging()` est appelé au début de `main.py` et que les loggers externes sont bien forcés en `CRITICAL`.
+- PDF vide/corrompu : vérifier `template_name` et l’installation de WeasyPrint (fonts, etc.).
+- Lent / RAM élevée : baisser `resolution`, baisser `max_workers`, ajuster `batch_size`.
+- Erreurs sporadiques : consulter `errors.log` dans le dossier de run.
