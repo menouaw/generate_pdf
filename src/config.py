@@ -14,7 +14,7 @@ def setup_logging():
 @dataclass
 class GenerationConfig:
     resolution: int = 80
-    num_documents: int = 1000
+    num_documents: int = 100
     batch_size: int = 50
     chunksize: int = 1
     output_format: str = "JPEG"

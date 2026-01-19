@@ -199,7 +199,7 @@ class DocumentGenerationPipeline:
             f"output_format={self.config.output_format}",
             f"resolution={self.config.resolution}",
             f"total_seconds={total_time:.2f}",
-            f"docs_per_second={docs_per_second:.2f}",
+            f"docs_per_second={docs_per_second:.0f}",
         ]
         report_path = run_dir / "report.txt"
         report_path.write_text("\n".join(report_lines), encoding="utf-8")

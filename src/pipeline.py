@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 from typing import List
+import shutil
 
 from config import GenerationConfig
 from worker import _init_worker, _process_document_batch
@@ -90,5 +91,12 @@ def run_pipeline(config: GenerationConfig, content_paragraphs: List[str], output
     if final_dir.exists():
         suffix = now.strftime("%S")
         final_dir = output_dir / f"{final_name}_{suffix}"
-    run_dir.rename(final_dir)
+    try:
+        run_dir.rename(final_dir)
+    except PermissionError:
+        time.sleep(0.5)
+        try:
+            run_dir.rename(final_dir)
+        except PermissionError:
+            shutil.move(str(run_dir), str(final_dir))
     return final_dir

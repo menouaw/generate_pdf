@@ -33,6 +33,9 @@ We have a dependency on [`Weasyprint`](https://weasyprint.readthedocs.io/en/stab
 
 So far, `Pango`, `cairo` and `GDK-PixBuf` libraries are available in `Ubuntu-18.04` and later by default.
 
+```bash
+pacman -S mingw-w64-x86_64-cairo mingw-w64-x86_64-pango
+```
 If you are running on Windows, MacOS, or other Linux distributions, please see [installation instructions from WeasyPrint](https://weasyprint.readthedocs.io/en/stable/install.html).
 
 **NOTE**: If you encounter the errors like `no library called "libcairo-2" was found`, this is probably due to the three extra dependencies missing.
