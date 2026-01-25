@@ -221,7 +221,7 @@ Dans `main.py`, modifie la config (exemples) :
 Depuis la racine du projet :
 
 ```bash
-python [main.py](http://main.py)
+python src/main.py
 ```
 
 Sorties :
@@ -243,7 +243,7 @@ Objectif : dans chaque run sous `output/`, supprimer tous les `*.pdf` sauf 1.
 Nettoie tous les runs `output/*/` :
 
 ```bash
-python clean_[up.py](http://up.py)
+python src/clean_up.py
 ```
 
 ### Mode simulation (recommandé)
@@ -251,13 +251,13 @@ python clean_[up.py](http://up.py)
 Affiche ce qui serait supprimé :
 
 ```bash
-python clean_[up.py](http://up.py) --dry-run
+python clean_up.py --dry-run
 ```
 
 ### Dossier output personnalisé
 
 ```bash
-python clean_[up.py](http://up.py) --output-dir "chemin/vers/output"
+python clean_up.py --output-dir "chemin/vers/output"
 ```
 
 ### Conserver un PDF précis
@@ -265,7 +265,7 @@ python clean_[up.py](http://up.py) --output-dir "chemin/vers/output"
 Garde un PDF spécifique (chemin relatif au run ou chemin absolu) :
 
 ```bash
-python clean_[up.py](http://up.py) --keep-pdf "00000/doc_00000000.pdf"
+python clean_up.py --keep-pdf "00000/doc_00000000.pdf"
 ```
 
 Si tu ne fournis pas `--keep-pdf`, le programme conserve le **premier PDF par ordre alphabétique** parmi tous les PDFs trouvés récursivement.
